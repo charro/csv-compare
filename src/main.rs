@@ -1,5 +1,6 @@
 use std::env;
 use std::process::exit;
+use colored::*;
 use indicatif::ProgressBar;
 use polars::frame::DataFrame;
 use polars::prelude::{col, IndexOfSchema, IntoVec, LazyCsvReader, LazyFileListReader, LazyFrame, SortOptions};
@@ -26,14 +27,15 @@ fn main() {
     let second_file_cols = get_column_names(&second_file_lf);
 
     if first_file_cols.len() != second_file_cols.len() {
-        println!("FILES ARE DIFFERENT: Different number of columns");
+        println!("{} : {}","FILES ARE DIFFERENT".red(), "Different number of columns".on_bright_red());
         exit(2);
     }
 
     for i in 0..first_file_cols.len() {
         if first_file_cols[i] != second_file_cols[i] {
-            println!("FILES ARE DIFFERENT: Different names in \
-            column {} => {} != {}", i, first_file_cols[i], second_file_cols[i]);
+            println!("{}: {} #{} => {} != {}",
+                "FILES ARE DIFFERENT".red(), "Different names for column".red(),
+                     i+1, first_file_cols[i].bold().yellow(), second_file_cols[i].bold().blue());
             exit(2);
         }
     }
@@ -53,7 +55,7 @@ fn main() {
                                                            sorting_column, column_name);
 
         if !first_data_frame.frame_equal_missing(&second_data_frame) {
-            println!("Values of column {} are different", column_name);
+            println!("{} {} {}", "Values for column".red(), column_name.on_bright_red(), "are different".red());
 
             exit(3);
         }
@@ -61,7 +63,7 @@ fn main() {
     }
     progress_bar.finish();
 
-    println!("FILES ARE IDENTICAL WHEN SORTED BY COLUMN: {}", sorting_column);
+    println!("{} {}", "FILES ARE IDENTICAL WHEN SORTED BY COLUMN:".green(), sorting_column.green());
 }
 
 fn get_lazy_frame(file_path: &str) -> LazyFrame {
