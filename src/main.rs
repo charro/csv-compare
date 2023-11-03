@@ -55,7 +55,10 @@ fn main() {
                                                            sorting_column, column_name);
 
         if !first_data_frame.frame_equal_missing(&second_data_frame) {
-            println!("{} {} {}", "Values for column".red(), column_name.on_bright_red(), "are different".red());
+            println!("{}: {} {} {}", "FILES ARE DIFFERENT".red(),
+                     "Values for column".red(),
+                     column_name.on_bright_red(),
+                     "are different".red());
 
             exit(3);
         }
