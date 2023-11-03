@@ -1,55 +1,41 @@
+use clap::Parser;
 use colored::*;
 use indicatif::ProgressBar;
 use polars::frame::DataFrame;
 use polars::prelude::{
     col, IndexOfSchema, IntoVec, LazyCsvReader, LazyFileListReader, LazyFrame, SortOptions,
 };
-use std::env;
+use std::collections::HashSet;
 use std::process::exit;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const EXECUTABLE_NAME: &str = env!("CARGO_PKG_NAME");
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// First file to compare
+    file1: String,
+
+    /// Second file to compare
+    file2: String,
+
+    /// Whether files are required to have the columns in the same order (default: allow unordered)
+    #[arg(default_value = "false", long, short)]
+    strict_column_order: bool,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args = Args::parse();
 
-    if args.len() < 3 {
-        println!("-- CSV Compare v{}. Usage:\n", VERSION);
-        println!("  {} file1.csv file2.csv\n", EXECUTABLE_NAME);
-        exit(1);
-    }
-
-    let first_file_path = &args[1];
-    let second_file_path = &args[2];
-
-    let first_file_lf = get_lazy_frame(first_file_path);
-    let second_file_lf = get_lazy_frame(second_file_path);
+    let first_file_lf = get_lazy_frame(args.file1.as_str());
+    let second_file_lf = get_lazy_frame(args.file2.as_str());
 
     let first_file_cols = get_column_names(&first_file_lf);
     let second_file_cols = get_column_names(&second_file_lf);
 
-    if first_file_cols.len() != second_file_cols.len() {
-        println!(
-            "{} : {}",
-            "FILES ARE DIFFERENT".red(),
-            "Different number of columns".on_bright_red()
-        );
-        exit(2);
-    }
-
-    for i in 0..first_file_cols.len() {
-        if first_file_cols[i] != second_file_cols[i] {
-            println!(
-                "{}: {} #{} => {} != {}",
-                "FILES ARE DIFFERENT".red(),
-                "Different names for column".red(),
-                i + 1,
-                first_file_cols[i].bold().yellow(),
-                second_file_cols[i].bold().blue()
-            );
-            exit(2);
-        }
-    }
+    assert_both_frames_are_comparable(
+        &first_file_cols,
+        &second_file_cols,
+        args.strict_column_order,
+    );
 
     let sorting_column = &first_file_cols[0];
     let columns_to_iterate = (first_file_cols.len() - 1) as u64;
@@ -88,6 +74,40 @@ fn main() {
         "FILES ARE IDENTICAL WHEN SORTED BY COLUMN:".green(),
         sorting_column.green()
     );
+}
+
+fn assert_both_frames_are_comparable(
+    first_file_cols: &[String],
+    second_file_cols: &[String],
+    is_strict_order: bool,
+) {
+    let have_same_columns = if is_strict_order {
+        first_file_cols.eq(second_file_cols)
+    } else {
+        // Convert the vectors into sets to ignore the order
+        let set1: HashSet<_> = first_file_cols.iter().collect();
+        let set2: HashSet<_> = second_file_cols.iter().collect();
+        set1 == set2
+    };
+
+    if !have_same_columns {
+        println!(
+            "{}: {} => [{}] != [{}]",
+            "FILES ARE DIFFERENT".red(),
+            "Different columns".red(),
+            first_file_cols.join(",").bold().yellow(),
+            second_file_cols.join(",").bold().blue()
+        );
+        if is_strict_order {
+            println!(
+                "{} {} {}",
+                "Hint:",
+                "--strict-order".bold(),
+                "flag is active"
+            );
+        }
+        exit(2);
+    }
 }
 
 fn get_lazy_frame(file_path: &str) -> LazyFrame {
