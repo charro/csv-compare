@@ -1,5 +1,6 @@
 # CSV Compare
-This is a little tool that solves a very specific problem: Comparing the content of 2 different CSV (comma separated values) files, taking in account that the rows and columns could be in different order. Also there's a way to enforce the strict order of columns (**--strict-order** flag).
+This is a little tool that solves a very specific problem: Comparing the content of 2 different CSV (comma separated values) files, taking in account that the rows and columns could be in different order. 
+Also there's a way to enforce the strict order of columns (**--strict-column-order** flag).
 
 To do that comparison, the 2 CSV files are compared column by column, using the first column as identifier for sorting.
 

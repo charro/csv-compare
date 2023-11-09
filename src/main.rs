@@ -2,9 +2,7 @@ use clap::Parser;
 use colored::*;
 use indicatif::ProgressBar;
 use polars::frame::DataFrame;
-use polars::prelude::{
-    col, IndexOfSchema, IntoVec, LazyCsvReader, LazyFileListReader, LazyFrame, SortOptions,
-};
+use polars::prelude::{col, IndexOfSchema, IntoVec, LazyCsvReader, LazyFileListReader, LazyFrame, SortOptions};
 use std::collections::HashSet;
 use std::process::exit;
 
@@ -28,6 +26,8 @@ fn main() {
     let first_file_lf = get_lazy_frame(args.file1.as_str());
     let second_file_lf = get_lazy_frame(args.file2.as_str());
 
+    assert_both_frames_have_same_row_num(&first_file_lf, &second_file_lf);
+
     let first_file_cols = get_column_names(&first_file_lf);
     let second_file_cols = get_column_names(&second_file_lf);
 
@@ -41,8 +41,9 @@ fn main() {
     let columns_to_iterate = (first_file_cols.len() - 1) as u64;
 
     println!(
-        "Comparing content of each column in both files when sorted by column: {} ...",
-        sorting_column
+        "Comparing content of each column in both files when sorted by column \"{}\"{}...",
+        sorting_column,
+        if args.strict_column_order {" . Strict order of columns enforced"} else {""}
     );
     let progress_bar = ProgressBar::new(columns_to_iterate);
     for i in 1..first_file_cols.len() {
@@ -74,6 +75,24 @@ fn main() {
         "FILES ARE IDENTICAL WHEN SORTED BY COLUMN:".green(),
         sorting_column.green()
     );
+}
+
+fn assert_both_frames_have_same_row_num(first_lazy_frame: &LazyFrame,
+                                        second_lazy_frame: &LazyFrame) {
+    let first_rows_num = get_rows_num(first_lazy_frame);
+    let second_rows_num = get_rows_num(second_lazy_frame);
+
+    if first_rows_num != second_rows_num {
+        println!(
+            "{}: {} {} <> {}",
+            "FILES ARE DIFFERENT".red(),
+            "Different number of rows".red(),
+            first_rows_num.to_string(),
+            second_rows_num.to_string()
+        );
+
+        exit(4);
+    }
 }
 
 fn assert_both_frames_are_comparable(
@@ -140,4 +159,12 @@ fn get_sorted_data_frame_for_column(
         .sort(sorting_column, SortOptions::default())
         .collect()
         .expect(format!("Couldn't sort column {column} by column {sorting_column}",).as_str())
+}
+
+fn get_rows_num(lazy_frame: &LazyFrame) -> u32 {
+    let first_column_name = get_column_names(&lazy_frame.clone())[0].to_string();
+    return lazy_frame.clone()
+        .select([col(first_column_name.as_str())])
+        .collect().expect("Error when counting the rows of the CSV file")
+        .shape().0 as u32;
 }
