@@ -1,6 +1,6 @@
 use clap::Parser;
 use colored::*;
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use polars::frame::DataFrame;
 use polars::prelude::{col, IndexOfSchema, IntoVec, LazyCsvReader, LazyFileListReader, LazyFrame, SortOptions};
 use std::collections::HashSet;
@@ -23,10 +23,16 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let first_file_lf = get_lazy_frame(args.file1.as_str());
-    let second_file_lf = get_lazy_frame(args.file2.as_str());
+    let first_file_path = args.file1.as_str();
+    let second_file_path = args.file2.as_str();
 
-    assert_both_frames_have_same_row_num(&first_file_lf, &second_file_lf);
+    println!("Comparing file {} with file {} ...", first_file_path, second_file_path);
+
+    let first_file_lf = get_lazy_frame(first_file_path);
+    let second_file_lf = get_lazy_frame(second_file_path);
+
+    let row_num = assert_both_frames_have_same_row_num(&first_file_lf, &second_file_lf);
+    println!("{}: {}", "Files have same number of rows".green(), row_num);
 
     let first_file_cols = get_column_names(&first_file_lf);
     let second_file_cols = get_column_names(&second_file_lf);
@@ -36,6 +42,7 @@ fn main() {
         &second_file_cols,
         args.strict_column_order,
     );
+    println!("{}", "Files have comparable columns".green());
 
     let sorting_column = &first_file_cols[0];
     let columns_to_iterate = (first_file_cols.len() - 1) as u64;
@@ -46,6 +53,10 @@ fn main() {
         if args.strict_column_order {" . Strict order of columns enforced"} else {""}
     );
     let progress_bar = ProgressBar::new(columns_to_iterate);
+    progress_bar.set_style(
+        ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .expect("Error creating progress bar. Incorrect Style?"));
+
     for i in 1..first_file_cols.len() {
         let column_name = &first_file_cols[i];
 
@@ -71,28 +82,32 @@ fn main() {
     progress_bar.finish();
 
     println!(
-        "{} {}",
-        "FILES ARE IDENTICAL WHEN SORTED BY COLUMN:".green(),
+        "Files {} and {} {} {}",
+        first_file_path.bold(),
+        second_file_path.bold(),
+        "ARE IDENTICAL WHEN SORTED BY COLUMN:".green(),
         sorting_column.green()
     );
 }
 
 fn assert_both_frames_have_same_row_num(first_lazy_frame: &LazyFrame,
-                                        second_lazy_frame: &LazyFrame) {
-    let first_rows_num = get_rows_num(first_lazy_frame);
-    let second_rows_num = get_rows_num(second_lazy_frame);
+                                        second_lazy_frame: &LazyFrame) -> u32 {
+    let first_row_num = get_rows_num(first_lazy_frame);
+    let second_row_num = get_rows_num(second_lazy_frame);
 
-    if first_rows_num != second_rows_num {
+    if first_row_num != second_row_num {
         println!(
             "{}: {} {} <> {}",
             "FILES ARE DIFFERENT".red(),
             "Different number of rows".red(),
-            first_rows_num.to_string(),
-            second_rows_num.to_string()
+            first_row_num.to_string(),
+            second_row_num.to_string()
         );
 
         exit(4);
     }
+
+    return first_row_num;
 }
 
 fn assert_both_frames_are_comparable(
