@@ -18,6 +18,11 @@ struct Args {
     /// Whether files are required to have the columns in the same order (default: allow unordered)
     #[arg(default_value = "false", long, short)]
     strict_column_order: bool,
+
+    /// How many columns to compare at the same time.
+    /// The bigger the number the faster, but will also increase the memory consumption
+    #[arg(default_value = "1", long, short)]
+    number_of_columns: usize
 }
 
 fn main() {
@@ -26,7 +31,11 @@ fn main() {
     let first_file_path = args.file1.as_str();
     let second_file_path = args.file2.as_str();
 
-    println!("Comparing file {} with file {} ...", first_file_path, second_file_path);
+    println!("Comparing file {} with file {}. {} column(s) at a time... {}",
+             first_file_path,
+             second_file_path,
+             args.number_of_columns,
+             if args.strict_column_order {" Strict order of columns enforced".yellow()} else {"".white()});
 
     let first_file_lf = get_lazy_frame(first_file_path);
     let second_file_lf = get_lazy_frame(second_file_path);
@@ -48,36 +57,49 @@ fn main() {
     let columns_to_iterate = (first_file_cols.len() - 1) as u64;
 
     println!(
-        "Comparing content of each column in both files when sorted by column \"{}\"{}...",
-        sorting_column,
-        if args.strict_column_order {" . Strict order of columns enforced"} else {""}
+        "Comparing content of columns in both files when sorted by column \"{}\"...",
+        sorting_column
     );
     let progress_bar = ProgressBar::new(columns_to_iterate);
     progress_bar.set_style(
         ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-            .expect("Error creating progress bar. Incorrect Style?"));
+            .expect("Error creating progress bar. Incorrect Style?. Please raise issue to developers of this tool"));
 
+
+    let number_of_columns_to_compare = args.number_of_columns;
+    let mut columns_to_compare = vec![];
     for i in 1..first_file_cols.len() {
         let column_name = &first_file_cols[i];
+        columns_to_compare.push(column_name);
 
-        let first_data_frame =
-            get_sorted_data_frame_for_column(&first_file_lf, sorting_column, column_name);
+        if columns_to_compare.len() == number_of_columns_to_compare || i == first_file_cols.len() - 1{
+            let first_data_frame =
+                get_sorted_data_frame_for_columns(&first_file_lf, sorting_column, &columns_to_compare);
 
-        let second_data_frame =
-            get_sorted_data_frame_for_column(&second_file_lf, sorting_column, column_name);
+            let second_data_frame =
+                get_sorted_data_frame_for_columns(&second_file_lf, sorting_column, &columns_to_compare);
 
-        if !first_data_frame.frame_equal_missing(&second_data_frame) {
-            println!(
-                "{}: {} {} {}",
-                "FILES ARE DIFFERENT".red(),
-                "Values for column".red(),
-                column_name.on_bright_red(),
-                "are different".red()
-            );
+            if !first_data_frame.frame_equal_missing(&second_data_frame) {
+                let column_names = columns_to_compare
+                    .iter()
+                    .copied()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .join(" | ");
 
-            exit(3);
+                println!(
+                    "{}: {} \n {} \n {}",
+                    "FILES ARE DIFFERENT".red(),
+                    "Values for column(s)".red(),
+                    column_names.red().bold(),
+                    "are different".red()
+                );
+
+                exit(3);
+            }
+            progress_bar.inc(columns_to_compare.len() as u64);
+            columns_to_compare.clear();
         }
-        progress_bar.inc(1);
     }
     progress_bar.finish();
 
@@ -163,17 +185,22 @@ fn get_column_names(lazy_frame: &LazyFrame) -> Vec<String> {
     schema.get_names().into_vec()
 }
 
-fn get_sorted_data_frame_for_column(
+fn get_sorted_data_frame_for_columns(
     lazy_frame: &LazyFrame,
-    sorting_column: &String,
-    column: &String,
+    sorting_by_column: &String,
+    columns: &Vec<&String>,
 ) -> DataFrame {
+    let mut all_columns = vec![col(sorting_by_column)];
+    for next_column in columns {
+        all_columns.push(col(next_column));
+    }
+
     lazy_frame
         .clone()
-        .select([col(sorting_column), col(column)])
-        .sort(sorting_column, SortOptions::default())
+        .select(all_columns)
+        .sort(sorting_by_column, SortOptions::default())
         .collect()
-        .expect(format!("Couldn't sort column {column} by column {sorting_column}",).as_str())
+        .expect(format!("Couldn't sort by column {sorting_by_column}",).as_str())
 }
 
 fn get_rows_num(lazy_frame: &LazyFrame) -> u32 {
