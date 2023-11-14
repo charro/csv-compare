@@ -22,7 +22,11 @@ struct Args {
     /// How many columns to compare at the same time.
     /// The bigger the number the faster, but will also increase the memory consumption
     #[arg(default_value = "1", long, short)]
-    number_of_columns: usize
+    number_of_columns: usize,
+
+    /// Column separator character
+    #[arg(default_value = ",", long, short = 'p')]
+    separator: char
 }
 
 fn main() {
@@ -37,8 +41,9 @@ fn main() {
              args.number_of_columns,
              if args.strict_column_order {" Strict order of columns enforced".yellow()} else {"".white()});
 
-    let first_file_lf = get_lazy_frame(first_file_path);
-    let second_file_lf = get_lazy_frame(second_file_path);
+    let separator = args.separator;
+    let first_file_lf = get_lazy_frame(first_file_path, separator);
+    let second_file_lf = get_lazy_frame(second_file_path, separator);
 
     let row_num = assert_both_frames_have_same_row_num(&first_file_lf, &second_file_lf);
     println!("{}: {}", "Files have same number of rows".green(), row_num);
@@ -166,10 +171,11 @@ fn assert_both_frames_are_comparable(
     }
 }
 
-fn get_lazy_frame(file_path: &str) -> LazyFrame {
+fn get_lazy_frame(file_path: &str, delimiter: char) -> LazyFrame {
     LazyCsvReader::new(file_path)
         .has_header(true)
         .with_infer_schema_length(Some(0))
+        .with_separator(delimiter as u8)
         .finish()
         .expect(format!("Couldn't open file {file_path}").as_str())
 }

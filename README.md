@@ -21,4 +21,9 @@ Compare columns in groups of 20 to improve speed of the comparison (using more m
 csv-compare --number-of-columns 20 fileA.csv fileB.csv
 ```
 
+Compare using a different column separator
+``` 
+csv-compare --separator ";" fileA.csv fileB.csv
+```
+
 It's written in glorious Rust and uses [Polars lib](https://www.pola.rs/) under the hood to make the sorting and comparison.
