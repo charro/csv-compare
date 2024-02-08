@@ -2,7 +2,9 @@ use clap::Parser;
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use polars::frame::DataFrame;
-use polars::prelude::{col, IndexOfSchema, IntoVec, LazyCsvReader, LazyFileListReader, LazyFrame, SortOptions};
+use polars::prelude::{
+    col, IndexOfSchema, IntoVec, LazyCsvReader, LazyFileListReader, LazyFrame, SortOptions,
+};
 use std::collections::HashSet;
 use std::process::exit;
 
@@ -26,7 +28,7 @@ struct Args {
 
     /// Column separator character
     #[arg(default_value = ",", long, short = 'p')]
-    separator: char
+    separator: char,
 }
 
 fn main() {
@@ -35,11 +37,17 @@ fn main() {
     let first_file_path = args.file1.as_str();
     let second_file_path = args.file2.as_str();
 
-    println!("Comparing file {} with file {}. {} column(s) at a time... {}",
-             first_file_path,
-             second_file_path,
-             args.number_of_columns,
-             if args.strict_column_order {" Strict order of columns enforced".yellow()} else {"".white()});
+    println!(
+        "Comparing file {} with file {}. {} column(s) at a time... {}",
+        first_file_path,
+        second_file_path,
+        args.number_of_columns,
+        if args.strict_column_order {
+            " Strict order of columns enforced".yellow()
+        } else {
+            "".white()
+        }
+    );
 
     let separator = args.separator;
     let first_file_lf = get_lazy_frame(first_file_path, separator);
@@ -70,21 +78,28 @@ fn main() {
         ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
             .expect("Error creating progress bar. Incorrect Style?. Please raise issue to developers of this tool"));
 
-
     let number_of_columns_to_compare = args.number_of_columns;
     let mut columns_to_compare = vec![];
     for i in 1..first_file_cols.len() {
         let column_name = &first_file_cols[i];
         columns_to_compare.push(column_name);
 
-        if columns_to_compare.len() == number_of_columns_to_compare || i == first_file_cols.len() - 1{
-            let first_data_frame =
-                get_sorted_data_frame_for_columns(&first_file_lf, sorting_column, &columns_to_compare);
+        if columns_to_compare.len() == number_of_columns_to_compare
+            || i == first_file_cols.len() - 1
+        {
+            let first_data_frame = get_sorted_data_frame_for_columns(
+                &first_file_lf,
+                sorting_column,
+                &columns_to_compare,
+            );
 
-            let second_data_frame =
-                get_sorted_data_frame_for_columns(&second_file_lf, sorting_column, &columns_to_compare);
+            let second_data_frame = get_sorted_data_frame_for_columns(
+                &second_file_lf,
+                sorting_column,
+                &columns_to_compare,
+            );
 
-            if !first_data_frame.frame_equal_missing(&second_data_frame) {
+            if !first_data_frame.equals_missing(&second_data_frame) {
                 let column_names = columns_to_compare
                     .iter()
                     .copied()
@@ -117,8 +132,10 @@ fn main() {
     );
 }
 
-fn assert_both_frames_have_same_row_num(first_lazy_frame: &LazyFrame,
-                                        second_lazy_frame: &LazyFrame) -> u32 {
+fn assert_both_frames_have_same_row_num(
+    first_lazy_frame: &LazyFrame,
+    second_lazy_frame: &LazyFrame,
+) -> u32 {
     let first_row_num = get_rows_num(first_lazy_frame);
     let second_row_num = get_rows_num(second_lazy_frame);
 
@@ -211,8 +228,11 @@ fn get_sorted_data_frame_for_columns(
 
 fn get_rows_num(lazy_frame: &LazyFrame) -> u32 {
     let first_column_name = get_column_names(&lazy_frame.clone())[0].to_string();
-    return lazy_frame.clone()
+    return lazy_frame
+        .clone()
         .select([col(first_column_name.as_str())])
-        .collect().expect("Error when counting the rows of the CSV file")
-        .shape().0 as u32;
+        .collect()
+        .expect("Error when counting the rows of the CSV file")
+        .shape()
+        .0 as u32;
 }
