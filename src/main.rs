@@ -29,6 +29,10 @@ struct Args {
     /// Column separator character
     #[arg(default_value = ",", long, short = 'p')]
     separator: char,
+
+    /// Column separator character. If not provided, first column would be used instead
+    #[arg(default_value = "", long, short = 'l')]
+    sorting_column: String
 }
 
 fn main() {
@@ -36,6 +40,7 @@ fn main() {
 
     let first_file_path = args.file1.as_str();
     let second_file_path = args.file2.as_str();
+    let sorting_column = args.sorting_column.as_str();
 
     println!(
         "Comparing file {} with file {}. {} column(s) at a time... {}",
@@ -66,7 +71,9 @@ fn main() {
     );
     println!("{}", "Files have comparable columns".green());
 
-    let sorting_column = &first_file_cols[0];
+    let sorting_column = if sorting_column != "" {&sorting_column.to_string()} else {&first_file_cols[0]};
+    println!("Sorting data by column {}", sorting_column);
+
     let columns_to_iterate = (first_file_cols.len() - 1) as u64;
 
     println!(
@@ -215,7 +222,10 @@ fn get_sorted_data_frame_for_columns(
 ) -> DataFrame {
     let mut all_columns = vec![col(sorting_by_column)];
     for next_column in columns {
-        all_columns.push(col(next_column));
+        // We must de-reference next_column as the iterator returns a reference of a reference
+        if *next_column != sorting_by_column {
+            all_columns.push(col(next_column));
+        }
     }
 
     lazy_frame
